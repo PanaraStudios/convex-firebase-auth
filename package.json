@@ -1,5 +1,5 @@
 {
-  "name": "panarastudios/convex-firebase-auth",
+  "name": "@panarastudios/convex-firebase-auth",
   "description": "A convex firebase auth component for Convex.",
   "repository": "github:panarastudios/convex-firebase-auth",
   "homepage": "https://github.com/panarastudios/convex-firebase-auth#readme",
@@ -70,6 +70,7 @@
     "react": "^18.3.1 || ^19.0.0"
   },
   "devDependencies": {
+    "@panarastudios/convex-firebase-auth": "file:.",
     "@convex-dev/eslint-plugin": "^1.1.1",
     "@edge-runtime/vm": "^5.0.0",
     "@eslint/eslintrc": "^3.3.3",
@@ -86,6 +87,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.0",
+    "firebase": "^12.9.0",
     "globals": "^17.3.0",
     "npm-run-all2": "8.0.4",
     "path-exists-cli": "2.0.0",

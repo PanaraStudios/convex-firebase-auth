@@ -5,150 +5,220 @@ import {
   queryGeneric,
 } from "convex/server";
 import type {
-  Auth,
   GenericActionCtx,
   GenericDataModel,
+  GenericQueryCtx,
   HttpRouter,
 } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 
-// See the example/convex/example.ts file for how to use this component.
+// ─── Helper Functions ──────────────────────────────────────────────────────
 
-/**
- *
- * @param ctx
- * @param targetId
- */
-export function translate(
+export function verifyToken(
   ctx: ActionCtx,
   component: ComponentApi,
-  commentId: string,
+  idToken: string,
 ) {
-  // By wrapping the function call, we can read from environment variables.
-  const baseUrl = getDefaultBaseUrlUsingEnv();
-  return ctx.runAction(component.lib.translate, { commentId, baseUrl });
+  const firebaseProjectId = getEnvVar("FIREBASE_PROJECT_ID");
+  return ctx.runAction(component.lib.verifyToken, {
+    idToken,
+    firebaseProjectId,
+  });
 }
 
-/**
- * For re-exporting of an API accessible from React clients.
- * e.g. `export const { list, add, translate } =
- * exposeApi(components.convexFirebaseAuth, {
- *   auth: async (ctx, operation) => { ... },
- * });`
- * See example/convex/example.ts.
- */
+export function getUser(
+  ctx: QueryCtx,
+  component: ComponentApi,
+  firebaseUid: string,
+) {
+  return ctx.runQuery(component.lib.getUserByFirebaseUid, { firebaseUid });
+}
+
+export function getUserData(
+  ctx: ActionCtx,
+  component: ComponentApi,
+  idToken: string,
+) {
+  const firebaseApiKey = getEnvVar("FIREBASE_API_KEY");
+  return ctx.runAction(component.lib.getUserData, {
+    idToken,
+    firebaseApiKey,
+  });
+}
+
+// ─── exposeApi Factory ─────────────────────────────────────────────────────
+
 export function exposeApi(
   component: ComponentApi,
-  options: {
-    /**
-     * It's very important to authenticate any functions that users will export.
-     * This function should return the authorized user's ID.
-     */
-    auth: (
-      ctx: { auth: Auth },
-      operation:
-        | { type: "read"; targetId: string }
-        | { type: "create"; targetId: string }
-        | { type: "update"; commentId: string },
-    ) => Promise<string>;
-    baseUrl?: string;
+  options?: {
+    firebaseProjectId?: string;
+    firebaseApiKey?: string;
   },
 ) {
-  const baseUrl = options.baseUrl ?? getDefaultBaseUrlUsingEnv();
+  const getProjectId = () =>
+    options?.firebaseProjectId ?? getEnvVar("FIREBASE_PROJECT_ID");
+  const getApiKey = () =>
+    options?.firebaseApiKey ?? getEnvVar("FIREBASE_API_KEY");
+
   return {
-    list: queryGeneric({
-      args: { targetId: v.string() },
+    verifyToken: actionGeneric({
+      args: { idToken: v.string() },
       handler: async (ctx, args) => {
-        await options.auth(ctx, { type: "read", targetId: args.targetId });
-        return await ctx.runQuery(component.lib.list, {
-          targetId: args.targetId,
+        return await ctx.runAction(component.lib.verifyToken, {
+          idToken: args.idToken,
+          firebaseProjectId: getProjectId(),
         });
       },
     }),
-    add: mutationGeneric({
-      args: { text: v.string(), targetId: v.string() },
+
+    getUser: queryGeneric({
+      args: { firebaseUid: v.string() },
       handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, {
-          type: "create",
-          targetId: args.targetId,
-        });
-        return await ctx.runMutation(component.lib.add, {
-          text: args.text,
-          userId: userId,
-          targetId: args.targetId,
+        return await ctx.runQuery(component.lib.getUserByFirebaseUid, {
+          firebaseUid: args.firebaseUid,
         });
       },
     }),
-    translate: actionGeneric({
-      args: { commentId: v.string() },
+
+    getUserById: queryGeneric({
+      args: { userId: v.string() },
       handler: async (ctx, args) => {
-        await options.auth(ctx, {
-          type: "update",
-          commentId: args.commentId,
+        return await ctx.runQuery(component.lib.getUser, {
+          userId: args.userId,
         });
-        return await ctx.runAction(component.lib.translate, {
-          commentId: args.commentId,
-          baseUrl,
+      },
+    }),
+
+    signOut: mutationGeneric({
+      args: { firebaseUid: v.string() },
+      handler: async (ctx, args) => {
+        await ctx.runMutation(component.lib.invalidateAllSessions, {
+          firebaseUid: args.firebaseUid,
+        });
+      },
+    }),
+
+    deleteUser: mutationGeneric({
+      args: { firebaseUid: v.string() },
+      handler: async (ctx, args) => {
+        await ctx.runMutation(component.lib.deleteUser, {
+          firebaseUid: args.firebaseUid,
+        });
+      },
+    }),
+
+    sendPasswordResetEmail: actionGeneric({
+      args: { email: v.string() },
+      handler: async (ctx, args) => {
+        await ctx.runAction(component.lib.sendPasswordResetEmail, {
+          email: args.email,
+          firebaseApiKey: getApiKey(),
+        });
+      },
+    }),
+
+    sendEmailVerification: actionGeneric({
+      args: { idToken: v.string() },
+      handler: async (ctx, args) => {
+        await ctx.runAction(component.lib.sendEmailVerification, {
+          idToken: args.idToken,
+          firebaseApiKey: getApiKey(),
         });
       },
     }),
   };
 }
 
-/**
- * Register HTTP routes for the component.
- * This allows you to expose HTTP endpoints for the component.
- * See example/convex/http.ts for an example.
- */
+// ─── HTTP Routes ───────────────────────────────────────────────────────────
+
 export function registerRoutes(
   http: HttpRouter,
   component: ComponentApi,
-  { pathPrefix = "/comments" }: { pathPrefix?: string } = {},
+  {
+    pathPrefix = "/auth",
+    firebaseProjectId,
+  }: { pathPrefix?: string; firebaseProjectId?: string } = {},
 ) {
+  const getProjectId = () =>
+    firebaseProjectId ?? getEnvVar("FIREBASE_PROJECT_ID");
+
   http.route({
-    path: `${pathPrefix}/last`,
-    method: "GET",
-    // Note we use httpActionGeneric here because it will be registered in
-    // the app's http.ts file, which has a different type than our `httpAction`.
+    path: `${pathPrefix}/verify`,
+    method: "POST",
     handler: httpActionGeneric(async (ctx, request) => {
-      const targetId = new URL(request.url).searchParams.get("targetId");
-      if (!targetId) {
-        return new Response(
-          JSON.stringify({ error: "targetId parameter required" }),
-          {
-            status: 400,
-            headers: {
-              "Content-Type": "application/json",
+      try {
+        const body = (await request.json()) as { idToken?: string };
+        if (!body.idToken) {
+          return new Response(
+            JSON.stringify({ error: "idToken is required" }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
             },
+          );
+        }
+        const user = await ctx.runAction(component.lib.verifyToken, {
+          idToken: body.idToken,
+          firebaseProjectId: getProjectId(),
+        });
+        return new Response(JSON.stringify(user), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        return new Response(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : "Unknown error",
+          }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
           },
         );
       }
-      const comments = await ctx.runQuery(component.lib.list, {
-        targetId,
+    }),
+  });
+
+  http.route({
+    path: `${pathPrefix}/user`,
+    method: "GET",
+    handler: httpActionGeneric(async (ctx, request) => {
+      const url = new URL(request.url);
+      const firebaseUid = url.searchParams.get("firebaseUid");
+      if (!firebaseUid) {
+        return new Response(
+          JSON.stringify({ error: "firebaseUid parameter is required" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      const user = await ctx.runQuery(component.lib.getUserByFirebaseUid, {
+        firebaseUid,
       });
-      const lastComment = comments[0] ?? null;
-      return new Response(JSON.stringify(lastComment), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
+      return new Response(JSON.stringify(user), {
+        status: user ? 200 : 404,
+        headers: { "Content-Type": "application/json" },
       });
     }),
   });
 }
 
-function getDefaultBaseUrlUsingEnv() {
-  return process.env.BASE_URL ?? "https://pirate.monkeyness.com";
+// ─── Utilities ─────────────────────────────────────────────────────────────
+
+function getEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing environment variable: ${name}. Set it in your Convex dashboard.`,
+    );
+  }
+  return value;
 }
 
-// Convenient types for `ctx` args, that only include the bare minimum.
-
-// type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
-// type MutationCtx = Pick<
-//   GenericMutationCtx<GenericDataModel>,
-//   "runQuery" | "runMutation"
-// >;
+type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
 type ActionCtx = Pick<
   GenericActionCtx<GenericDataModel>,
   "runQuery" | "runMutation" | "runAction"

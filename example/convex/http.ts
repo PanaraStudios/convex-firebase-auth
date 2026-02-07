@@ -1,20 +1,14 @@
 import { httpRouter } from "convex/server";
-import { registerRoutes } from "panarastudios/convex-firebase-auth";
+import { registerRoutes } from "@panarastudios/convex-firebase-auth";
 import { components } from "./_generated/api";
 
 const http = httpRouter();
 
-// Initialize the component
-
-// Register HTTP routes for the component
-// This will expose a GET endpoint at /comments/last that returns the most recent comment
+// Register Firebase Auth HTTP routes
+// POST /auth/verify - Verify a Firebase ID token
+// GET /auth/user?firebaseUid=... - Get user data by Firebase UID
 registerRoutes(http, components.convexFirebaseAuth, {
-  pathPrefix: "/comments",
+  pathPrefix: "/auth",
 });
-
-// You can also register routes at different paths
-// convexFirebaseAuth.registerRoutes(http, {
-//   path: "/api/comments/latest",
-// });
 
 export default http;

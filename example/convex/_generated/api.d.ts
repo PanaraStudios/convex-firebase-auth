@@ -49,5 +49,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  convexFirebaseAuth: import("panarastudios/convex-firebase-auth/_generated/component.js").ComponentApi<"convexFirebaseAuth">;
+  convexFirebaseAuth: import("@panarastudios/convex-firebase-auth/_generated/component.js").ComponentApi<"convexFirebaseAuth">;
 };

@@ -77,7 +77,7 @@ package.json.
 - [ ] Links to docs / other resources?
 
 Found a bug? Feature request?
-[File it here](https://github.com/panarastudios/convex-firebase-auth/issues).
+[File it here](https://github.com/@panarastudios/convex-firebase-auth/issues).
 
 ## Installation
 
@@ -87,7 +87,7 @@ component by calling `use`:
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
-import convexFirebaseAuth from "panarastudios/convex-firebase-auth/convex.config.js";
+import convexFirebaseAuth from "@panarastudios/convex-firebase-auth/convex.config.js";
 
 const app = defineApp();
 app.use(convexFirebaseAuth);
@@ -120,7 +120,7 @@ You can register HTTP routes for the component to expose HTTP endpoints:
 
 ```ts
 import { httpRouter } from "convex/server";
-import { registerRoutes } from "panarastudios/convex-firebase-auth";
+import { registerRoutes } from "@panarastudios/convex-firebase-auth";
 import { components } from "./_generated/api";
 
 const http = httpRouter();
